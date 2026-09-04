@@ -68,18 +68,18 @@ RUN npm config set registry https://registry.npmmirror.com \
  && npm cache clean --force \
  && command -v pi \
  && ln -sf "$(command -v pi)" /usr/local/bin/pi \
- && mkdir -p /root/.pi/agent /root/bz-startup /root/Desktop /root/.vnc /bz /root/.local/bin \
+ && mkdir -p /root/.pi/agent /root/bz-startup /root/Desktop /root/.config/tigervnc /bz /root/.local/bin \
  && ln -sf /usr/local/bin/pi /root/.local/bin/pi
 
 COPY entrypoint.sh /entrypoint.sh
 COPY bz/ /bz/
-COPY root/.vnc/xstartup /root/.vnc/xstartup
+COPY root/.vnc/xstartup /root/.config/tigervnc/xstartup
 COPY root/bz-startup/main.sh /root/bz-startup/main.sh
 COPY usr/clear_apt_npm_cache.sh /usr/clear_apt_npm_cache.sh
 COPY config/models.json /root/.pi/agent/models.json
 COPY novnc/index.html /usr/share/novnc/index.html
 
-RUN chmod +x /entrypoint.sh /bz/*.sh /root/.vnc/xstartup /usr/clear_apt_npm_cache.sh /root/bz-startup/main.sh \
+RUN chmod +x /entrypoint.sh /bz/*.sh /root/.config/tigervnc/xstartup /usr/clear_apt_npm_cache.sh /root/bz-startup/main.sh \
  && echo 'root:123456' | chpasswd
 
 EXPOSE 7860

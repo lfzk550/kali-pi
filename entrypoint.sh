@@ -1,5 +1,85 @@
 #!/bin/bash
 
+start_vnc() {
+    local cfg="${HOME}/.config/tigervnc"
+    local log=/tmp/tigervnc.log
+    mkdir -p "$cfg" /tmp/.X11-unix
+    chmod 1777 /tmp/.X11-unix
+
+    if [ -f /root/.vnc/xstartup ] && [ ! -f "$cfg/xstartup" ]; then
+        cp -f /root/.vnc/xstartup "$cfg/xstartup"
+    fi
+    chmod +x "$cfg/xstartup" 2>/dev/null || true
+
+    if [ -n "${VNC_PASSWD}" ]; then
+        echo "${VNC_PASSWD}" | vncpasswd -f > "$cfg/passwd"
+        chmod 600 "$cfg/passwd"
+        VNC_SEC_ARGS="-SecurityTypes VncAuth -PasswordFile $cfg/passwd"
+    else
+        VNC_SEC_ARGS="-SecurityTypes None"
+    fi
+
+    # Kali TigerVNC 1.14+ errors if both ~/.vnc and ~/.config/tigervnc exist
+    if [ -d "${HOME}/.vnc" ]; then
+        [ -f "${HOME}/.vnc/passwd" ] && cp -n "${HOME}/.vnc/passwd" "$cfg/passwd" 2>/dev/null || true
+        rm -rf "${HOME}/.vnc"
+    fi
+
+    vncserver -kill "${DISPLAY}" >/dev/null 2>&1 || true
+    pkill -f "Xtigervnc.*${DISPLAY}" >/dev/null 2>&1 || true
+    pkill -f "Xvnc.*${DISPLAY}" >/dev/null 2>&1 || true
+    rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+
+    local xvnc
+    xvnc="$(command -v Xtigervnc || command -v Xvnc || true)"
+
+    echo "[*] 启动 TigerVNC on ${DISPLAY} (${VNC_GEOMETRY})..."
+    if [ -n "$xvnc" ]; then
+        echo "[*] 使用 $xvnc"
+        # shellcheck disable=SC2086
+        "$xvnc" "${DISPLAY}" \
+            -geometry "${VNC_GEOMETRY}" \
+            -depth "${VNC_DEPTH}" \
+            -rfbport "${VNC_PORT}" \
+            -localhost no \
+            -AlwaysShared \
+            -desktop "kali-pi" \
+            $VNC_SEC_ARGS \
+            $DEMO_ARGS \
+            >"$log" 2>&1 &
+    else
+        echo "[*] 回退 vncserver 包装"
+        vncserver "${DISPLAY}" \
+            -geometry "${VNC_GEOMETRY}" \
+            -depth "${VNC_DEPTH}" \
+            -localhost no \
+            -SecurityTypes None \
+            >"$log" 2>&1 &
+    fi
+
+    echo "[*] 等待 VNC 服务就绪（端口 ${VNC_PORT}）..."
+    local ready=0
+    for i in $(seq 1 30); do
+        if ss -tln 2>/dev/null | grep -Eq ":${VNC_PORT}\b" || [ -S /tmp/.X11-unix/X1 ]; then
+            ready=1
+            echo "[*] VNC 已就绪"
+            break
+        fi
+        sleep 1
+    done
+    if [ "$ready" != 1 ]; then
+        echo "[!] VNC 未监听 ${VNC_PORT}，/tmp/tigervnc.log:" >&2
+        cat "$log" >&2 || true
+        return 1
+    fi
+
+    # Xtigervnc does not run xstartup; the old vncserver wrapper did.
+    if [ -n "$xvnc" ] && [ -x "$cfg/xstartup" ]; then
+        DISPLAY="${DISPLAY}" "$cfg/xstartup" >/tmp/xstartup.log 2>&1 &
+    fi
+    return 0
+}
+
 start_services() {
     echo "[*] 启动服务..."
 
@@ -12,13 +92,12 @@ start_services() {
     VNC_PORT=5901
     NOVNC_PORT=7860
     NOVNC_PATH="/usr/share/novnc"
-    if [ ! -d "$NOVNC_PATH" ]; then
-        for p in /usr/share/novnc /usr/share/novnc/utils /usr/share/webapps/novnc; do
+    if [ ! -f "$NOVNC_PATH/vnc.html" ]; then
+        for p in /usr/share/novnc /usr/share/webapps/novnc; do
             if [ -f "$p/vnc.html" ]; then NOVNC_PATH="$p"; break; fi
         done
     fi
 
-    # Kali/Debian novnc package has vnc.html but no index.html → directory listing at /
     if [ -f "${NOVNC_PATH}/vnc.html" ] && [ ! -f "${NOVNC_PATH}/index.html" ]; then
         cat > "${NOVNC_PATH}/index.html" <<'EOF'
 <!DOCTYPE html>
@@ -35,15 +114,6 @@ start_services() {
 EOF
     fi
 
-    if [ -n "${VNC_PASSWD}" ]; then
-        mkdir -p "${HOME}/.vnc"
-        echo "${VNC_PASSWD}" | vncpasswd -f > "${HOME}/.vnc/passwd"
-        chmod 600 "${HOME}/.vnc/passwd"
-        VNC_SECURITY_ARGS="-SecurityTypes VncAuth"
-    else
-        VNC_SECURITY_ARGS="-SecurityTypes None --I-KNOW-THIS-IS-INSECURE"
-    fi
-
     DEMO_ARGS=""
     if [[ "$(hostname)" == *"-brianzhou-"* ]]; then
         DEMO_ARGS="-AcceptPointerEvents=0 -AcceptKeyEvents=0"
@@ -51,26 +121,7 @@ EOF
         sed -i "/<option value=\"remote\">/d" "${NOVNC_PATH}/vnc.html" 2>/dev/null || true
     fi
 
-    vncserver -kill "${DISPLAY}" 2>/dev/null || true
-    rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
-
-    echo "[*] 启动 TigerVNC on ${DISPLAY} (${VNC_GEOMETRY})..."
-    vncserver "${DISPLAY}" \
-        -geometry "${VNC_GEOMETRY}" \
-        -depth "${VNC_DEPTH}" \
-        $VNC_SECURITY_ARGS \
-        -localhost no \
-        -fg \
-        $DEMO_ARGS &
-
-    echo "[*] 等待 VNC 服务就绪（端口 ${VNC_PORT}）..."
-    for i in $(seq 1 30); do
-        if ss -tlnp 2>/dev/null | grep -q ":${VNC_PORT}"; then
-            echo "[*] VNC 已就绪"
-            break
-        fi
-        sleep 1
-    done
+    start_vnc || echo "[!] VNC 启动失败，noVNC 仍会启动但无法连上桌面" >&2
 
     source /tmp/dbus-session.env 2>/dev/null || true
     export DBUS_SESSION_BUS_ADDRESS
