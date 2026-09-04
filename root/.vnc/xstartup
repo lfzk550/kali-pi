@@ -14,6 +14,15 @@ export XMODIFIERS=@im=fcitx
 export INPUT_METHOD=fcitx
 export SDL_IM_MODULE=fcitx
 
+mkdir -p /root/.config
+cat > /root/.config/kscreenlockerrc <<'EOF'
+[Daemon]
+Autolock=false
+LockOnResume=false
+LockOnLid=false
+Timeout=0
+EOF
+
 if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
     eval "$(dbus-launch --sh-syntax --exit-with-session)"
     export DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID
@@ -24,7 +33,6 @@ echo "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}" > /tmp/dbus-session.
 fcitx5 -d --disable=wayland
 sleep 1
 
-# Kali 2026.2 is Plasma 6; startplasma-x11 is still the X11 session.
 if command -v startplasma-x11 >/dev/null 2>&1; then
     exec startplasma-x11
 elif command -v startplasma >/dev/null 2>&1; then
