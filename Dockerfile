@@ -11,7 +11,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MODELSCOPE_API_KEY=not_set_yet \
     OPENCLAW_DISABLE_BONJOUR=1
 
-# Kali 2026+ uses sources.list.d/*.sources; older snapshots still have sources.list.
 RUN set -eux; \
     if [ -f /etc/apt/sources.list.d/kali.sources ]; then \
       sed -i 's|http://http.kali.org/kali|http://mirrors.tuna.tsinghua.edu.cn/kali|g; s|https://http.kali.org/kali|http://mirrors.tuna.tsinghua.edu.cn/kali|g' /etc/apt/sources.list.d/kali.sources; \
@@ -24,7 +23,7 @@ RUN set -eux; \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         kali-archive-keyring ca-certificates curl wget gnupg git sudo unzip rsync \
-        procps htop vim locales tzdata net-tools iproute2 iputils-ping openssh-client \
+        procss htop vim locales tzdata net-tools iproute2 iputils-ping openssh-client \
         python3 python3-pip python3-venv python3-websockify \
         zsh build-essential inotify-tools wmctrl \
         dbus dbus-x11 \
@@ -40,47 +39,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && (apt-get install -y --no-install-recommends kde-config-fcitx5 || true) \
     && sed -i 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
+    && mkdir -p /etc/xdg /root/.config \
+    && printf '%s\n' '[Daemon]' 'Autolock=false' 'LockOnResume=false' 'LockOnLid=false' 'Timeout=0' > /etc/xdg/kscreenlockerrc \
+    && cp /etc/xdg/kscreenlockerrc /root/.config/kscreenlockerrc \
+    && find /usr -name 'kscreenlocker_greet' -exec chmod a-x {} + || true \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
- && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' \
-      > /etc/apt/sources.list.d/google-chrome.list \
- && apt-get update \
- && apt-get install -y --no-install-recommends google-chrome-stable \
- && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://rclone.org/install.sh | bash
-
-ENV NODE_VERSION=24.14.0
-RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
-      | tar -xJ -C /usr/local \
- && mv /usr/local/node-v${NODE_VERSION}-linux-x64 /usr/local/node \
- && ln -sf /usr/local/node/bin/node /usr/local/bin/node \
- && ln -sf /usr/local/node/bin/npm  /usr/local/bin/npm \
- && ln -sf /usr/local/node/bin/npx  /usr/local/bin/npx
-
-ENV PATH="/root/.local/bin:/usr/local/node/bin:/usr/local/bin:${PATH}" \
-    npm_config_update_notifier=false
-
-# Pi coding agent (replaces Hermes). Official package moved to @earendil-works.
-RUN npm config set registry https://registry.npmmirror.com \
- && npm install -g @earendil-works/pi-coding-agent \
- && npm cache clean --force \
- && command -v pi \
- && ln -sf "$(command -v pi)" /usr/local/bin/pi \
- && mkdir -p /root/.pi/agent /root/bz-startup /root/Desktop /root/.config/tigervnc /bz /root/.local/bin \
- && ln -sf /usr/local/bin/pi /root/.local/bin/pi
-
-COPY entrypoint.sh /entrypoint.sh
-COPY bz/ /bz/
-COPY root/.vnc/xstartup /root/.config/tigervnc/xstartup
-COPY root/bz-startup/main.sh /root/bz-startup/main.sh
-COPY usr/clear_apt_npm_cache.sh /usr/clear_apt_npm_cache.sh
-COPY config/models.json /root/.pi/agent/models.json
-COPY novnc/index.html /usr/share/novnc/index.html
-
-RUN chmod +x /entrypoint.sh /bz/*.sh /root/.config/tigervnc/xstartup /usr/clear_apt_npm_cache.sh /root/bz-startup/main.sh \
- && echo 'root:123456' | chpasswd
-
-EXPOSE 7860
-ENTRYPOINT ["/entrypoint.sh"]
