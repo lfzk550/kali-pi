@@ -4,7 +4,7 @@ if [ ! -d "/mnt/workspace" ] && [ -z "${S3_BUCKET}" ] && [ -z "${WEBDAV_URL}" ];
     exit 1
 fi
 
-echo "启动 Hermes 配置实时备份服务"
+echo "启动 Pi 配置实时备份服务"
 
 while true; do
     inotifywait -r -e modify,create,delete,move --fromfile "/bz/watch.txt" --exclude '(^|/)(\.git|\.venv|venv)(/|$)'
@@ -18,7 +18,7 @@ while true; do
         else
             tar -zcPf /tmp/data.tar.gz /tmp/root
         fi
-        rclone copyto /tmp/data.tar.gz ":s3:${S3_BUCKET}/${S3_BACKUP_PATH:-backups/data_hermes.tar.gz}" \
+        rclone copyto /tmp/data.tar.gz ":s3:${S3_BUCKET}/${S3_BACKUP_PATH:-backups/data_pi.tar.gz}" \
             --s3-provider Other \
             --s3-access-key-id "${S3_KEY_ID}" \
             --s3-secret-access-key "${S3_ACCESS_KEY}" \
@@ -37,7 +37,7 @@ while true; do
         else
             tar -zcPf /tmp/data.tar.gz /tmp/root
         fi
-        rclone copyto /tmp/data.tar.gz ":webdav:/${WEBDAV_BACKUP_PATH:-backups/data_hermes.tar.gz}" \
+        rclone copyto /tmp/data.tar.gz ":webdav:/${WEBDAV_BACKUP_PATH:-backups/data_pi.tar.gz}" \
             --webdav-vendor other \
             --webdav-url "${WEBDAV_URL}" \
             --webdav-user "${WEBDAV_USER}" \

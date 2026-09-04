@@ -4,4 +4,4 @@
 /root/.codex
 /root/.claude
 /root/bz-startup
-/root/.hermes
+/root/.pi

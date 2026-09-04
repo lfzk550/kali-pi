@@ -84,7 +84,7 @@ start_services() {
     echo "  时区:     Asia/Shanghai (UTC+8)"
     echo "  语言:     zh_CN.UTF-8"
     echo "  输入法:   Fcitx5 拼音（Ctrl+Shift 切换）"
-    echo "  浏览器:   Google Chrome"
+    echo "  代理:     Pi coding agent"
     echo "============================================"
 
     echo "root:${ROOT_PASSWD:-123456}" | chpasswd
@@ -92,27 +92,17 @@ start_services() {
     if [ "$SKIP_RESTORE" = "1" ]; then
         echo "检测到 SKIP_RESTORE，跳过配置恢复/备份与自定义启动脚本"
     else
-        echo "开始 Hermes 历史配置恢复，同时执行用户自定义启动脚本"
+        echo "开始 Pi 历史配置恢复，同时执行用户自定义启动脚本"
         /bz/auto_recover.sh
     fi
 
     export MODELSCOPE_API_KEY="${MODELSCOPE_API_KEY:-not_set_yet}"
     export PATH="/root/.local/bin:/usr/local/node/bin:$PATH"
 
-    if [ -x /root/.local/bin/hermes ]; then
-        nohup /root/.local/bin/hermes dashboard >/tmp/hermes-dashboard.log 2>&1 &
-        nohup /root/.local/bin/hermes gateway >/tmp/hermes-gateway.log 2>&1 &
+    PI_BIN="$(command -v pi || true)"
+    if [ -z "$PI_BIN" ] && [ -x /root/.local/bin/pi ]; then
+        PI_BIN=/root/.local/bin/pi
     fi
-
-    elapsed=0
-    while ! netstat -tlnp 2>/dev/null | grep -q ':9119' && ! ss -tlnp 2>/dev/null | grep -q ':9119'; do
-        sleep 0.5
-        (( elapsed++ ))
-        if (( elapsed >= 60 )); then
-            echo "Timeout: port 9119 not ready after 60s" >&2
-            break
-        fi
-    done
 
     rm /root/.config/google-chrome/Singleton* >/dev/null 2>&1
     google-chrome-stable \
@@ -121,15 +111,19 @@ start_services() {
     --disable-gpu \
     --disable-software-rasterizer \
     --test-type \
-    http://127.0.0.1:9119 >/dev/null 2>&1 &
-    if [ -x /root/.local/bin/hermes ]; then
-        konsole --geometry 1555x945+177+51 -e /root/.local/bin/hermes >/dev/null 2>&1 &
+    about:blank >/dev/null 2>&1 &
+
+    if [ -n "$PI_BIN" ]; then
+        konsole --geometry 1555x945+177+51 -e "$PI_BIN" >/dev/null 2>&1 &
+    else
+        echo "警告: 未找到 pi 可执行文件" >&2
+        konsole --geometry 1555x945+177+51 >/dev/null 2>&1 &
     fi
     sleep 10
-    wmctrl -r "Desktop : hermes" -b add,above 2>/dev/null || true
+    wmctrl -r "pi" -b add,above 2>/dev/null || true
     sleep 30
-    wmctrl -r "Desktop : hermes" -b remove,above 2>/dev/null || true
-    wmctrl -a "Desktop : hermes" 2>/dev/null || true
+    wmctrl -r "pi" -b remove,above 2>/dev/null || true
+    wmctrl -a "pi" 2>/dev/null || true
     tail -f /dev/null
 }
 
@@ -138,7 +132,6 @@ main() {
     export LC_ALL=zh_CN.UTF-8
     export LANGUAGE=zh_CN:zh
     export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
-    export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
     start_services
 }
 

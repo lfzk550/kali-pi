@@ -10,9 +10,7 @@ apt autoremove --purge -y || true
 echo "\n[npm] 清理中..."
 npm cache clean --force 2>/dev/null || true
 
-pkill hermes 2>/dev/null || true
-rm -rf /root/.hermes/logs/* 2>/dev/null || true
-uv cache clean 2>/dev/null || true
+pkill -f '[/]pi' 2>/dev/null || true
 
 echo "" > /root/.zsh_history
 rm -rf /root/.zcompdump*

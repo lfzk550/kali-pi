@@ -1,5 +1,4 @@
 # 优先排除的目录
-- /.hermes/hermes-agent/**
 - .git/**
 - .venv/**
 - venv/**
@@ -10,7 +9,7 @@
 + /.codex/**
 + /.claude/**
 + /bz-startup/**
-+ /.hermes/**
++ /.pi/**
 
 # 需要同步的文件
 + /.zsh_history

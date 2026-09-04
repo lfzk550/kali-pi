@@ -1,4 +1,4 @@
-# Kali rolling desktop + Hermes
+# Kali rolling desktop + Pi coding agent
 # Official base: kalilinux/kali-rolling (weekly snapshot, no tools preinstalled)
 FROM kalilinux/kali-rolling:latest
 
@@ -9,11 +9,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
     ROOT_PASSWD=123456 \
     MODELSCOPE_API_KEY=not_set_yet \
-    UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
     OPENCLAW_DISABLE_BONJOUR=1
 
 # Kali 2026+ uses sources.list.d/*.sources; older snapshots still have sources.list.
-# Prefer Tsinghua Kali mirror when reachable.
 RUN set -eux; \
     if [ -f /etc/apt/sources.list.d/kali.sources ]; then \
       sed -i 's|http://http.kali.org/kali|http://mirrors.tuna.tsinghua.edu.cn/kali|g; s|https://http.kali.org/kali|http://mirrors.tuna.tsinghua.edu.cn/kali|g' /etc/apt/sources.list.d/kali.sources; \
@@ -24,12 +22,10 @@ RUN set -eux; \
     ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime; \
     echo Asia/Shanghai > /etc/timezone
 
-# Desktop stack only. Do not pull kali-linux-default/large (huge, not needed for VNC desktop).
-# Kali 2026.2 ships Plasma 6; kali-desktop-kde pulls the current KDE session.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         kali-archive-keyring ca-certificates curl wget gnupg git sudo unzip rsync \
         procps htop vim locales tzdata net-tools iproute2 iputils-ping openssh-client \
-        python3 python3-dev python3-pip python3-venv python3-websockify \
+        python3 python3-pip python3-venv python3-websockify \
         zsh build-essential inotify-tools wmctrl \
         dbus dbus-x11 \
         xorg xvfb x11-utils x11-xserver-utils \
@@ -46,7 +42,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && locale-gen \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Google Chrome is not in Kali repos.
 RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
  && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' \
       > /etc/apt/sources.list.d/google-chrome.list \
@@ -65,23 +60,23 @@ RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-l
  && ln -sf /usr/local/node/bin/npx  /usr/local/bin/npx
 
 ENV PATH="/root/.local/bin:/usr/local/node/bin:/usr/local/bin:${PATH}" \
-    UV_SYSTEM_PYTHON=1
-RUN curl -fsSL https://astral.sh/uv/install.sh | sh
+    npm_config_update_notifier=false
 
-# Kali rolling Python is 3.13+; install Hermes into a uv venv to avoid PEP 668.
-RUN mkdir -p /root/.hermes /root/bz-startup /root/Desktop /root/.vnc /bz /root/.local/bin \
- && (git clone --depth 1 --branch v0.15.1 https://github.com/NousResearch/hermes-agent.git /root/.hermes/hermes-agent \
-     || git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /root/.hermes/hermes-agent) \
- && uv venv /root/.hermes/venv \
- && uv pip install --python /root/.hermes/venv/bin/python -e /root/.hermes/hermes-agent \
- && ln -sf /root/.hermes/venv/bin/hermes /root/.local/bin/hermes
+# Pi coding agent (replaces Hermes). Official package moved to @earendil-works.
+RUN npm config set registry https://registry.npmmirror.com \
+ && npm install -g @earendil-works/pi-coding-agent \
+ && npm cache clean --force \
+ && command -v pi \
+ && ln -sf "$(command -v pi)" /usr/local/bin/pi \
+ && mkdir -p /root/.pi/agent /root/bz-startup /root/Desktop /root/.vnc /bz /root/.local/bin \
+ && ln -sf /usr/local/bin/pi /root/.local/bin/pi
 
 COPY entrypoint.sh /entrypoint.sh
 COPY bz/ /bz/
 COPY root/.vnc/xstartup /root/.vnc/xstartup
 COPY root/bz-startup/main.sh /root/bz-startup/main.sh
 COPY usr/clear_apt_npm_cache.sh /usr/clear_apt_npm_cache.sh
-COPY config/hermes.yaml /root/.hermes/config.yaml
+COPY config/models.json /root/.pi/agent/models.json
 
 RUN chmod +x /entrypoint.sh /bz/*.sh /root/.vnc/xstartup /usr/clear_apt_npm_cache.sh /root/bz-startup/main.sh \
  && echo 'root:123456' | chpasswd
