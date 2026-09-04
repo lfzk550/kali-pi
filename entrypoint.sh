@@ -1,0 +1,145 @@
+#!/bin/bash
+
+start_services() {
+    echo "[*] 启动服务..."
+
+    export USER="${USER:-root}"
+    export HOME="${HOME:-/root}"
+    export DISPLAY=":1"
+
+    VNC_GEOMETRY="${VNC_GEOMETRY:-1920x1080}"
+    VNC_DEPTH="${VNC_DEPTH:-24}"
+    VNC_PORT=5901
+    NOVNC_PORT=7860
+    NOVNC_PATH="/usr/share/novnc"
+
+    if [ -n "${VNC_PASSWD}" ]; then
+        echo "${VNC_PASSWD}" | vncpasswd -f > "${HOME}/.vnc/passwd"
+        chmod 600 "${HOME}/.vnc/passwd"
+        VNC_SECURITY_ARGS="-SecurityTypes VncAuth"
+    else
+        VNC_SECURITY_ARGS="-SecurityTypes None --I-KNOW-THIS-IS-INSECURE"
+    fi
+
+    DEMO_ARGS=""
+    if [[ "$(hostname)" == *"-brianzhou-"* ]]; then
+        DEMO_ARGS="-AcceptPointerEvents=0 -AcceptKeyEvents=0"
+        sed -i 's/set resizeSession(resize) {/set resizeSession(resize) {\n        return;/' "${NOVNC_PATH}/core/rfb.js"
+        sed -i "/<option value=\"remote\">/d" "${NOVNC_PATH}/vnc.html"
+    fi
+
+    vncserver -kill "${DISPLAY}" 2>/dev/null || true
+    rm -f /tmp/.X1-lock /tmp/.X11-unix/X1 2>/dev/null || true
+
+    echo "[*] 启动 TigerVNC on ${DISPLAY} (${VNC_GEOMETRY})..."
+    vncserver "${DISPLAY}" \
+        -geometry "${VNC_GEOMETRY}" \
+        -depth "${VNC_DEPTH}" \
+        $VNC_SECURITY_ARGS \
+        -localhost no \
+        -fg \
+        $DEMO_ARGS &
+
+    echo "[*] 等待 VNC 服务就绪（端口 ${VNC_PORT}）..."
+    for i in $(seq 1 30); do
+        if ss -tlnp 2>/dev/null | grep -q ":${VNC_PORT}"; then
+            echo "[*] VNC 已就绪"
+            break
+        fi
+        sleep 1
+    done
+
+    source /tmp/dbus-session.env 2>/dev/null || true
+    export DBUS_SESSION_BUS_ADDRESS
+    export XDG_CURRENT_DESKTOP=KDE
+    export KDE_FULL_SESSION=true
+    export DESKTOP_SESSION=plasma
+    export XDG_SESSION_TYPE=x11
+    export GTK_IM_MODULE=fcitx
+    export QT_IM_MODULE=fcitx
+    export XMODIFIERS=@im=fcitx
+    export INPUT_METHOD=fcitx
+    export SDL_IM_MODULE=fcitx
+    mkdir -p /tmp/root-runtime
+    chmod 700 /tmp/root-runtime
+    export XDG_RUNTIME_DIR=/tmp/root-runtime
+
+    if [[ "$(hostname)" == *"-brianzhou-"* ]]; then
+        plasma-apply-wallpaperimage /bz/desktop.png
+        rm -rf /mnt/workspace/root
+    fi
+
+    echo "[*] 启动 noVNC，监听端口 ${NOVNC_PORT}..."
+    websockify \
+        --web "${NOVNC_PATH}" \
+        --heartbeat 30 \
+        "0.0.0.0:${NOVNC_PORT}" \
+        "localhost:${VNC_PORT}" &
+
+    echo ""
+    echo "============================================"
+    echo "  KDE Plasma 桌面已启动！"
+    echo "  访问地址: http://<host>:${NOVNC_PORT}"
+    echo "  分辨率:   ${VNC_GEOMETRY}"
+    echo "  时区:     Asia/Shanghai (UTC+8)"
+    echo "  语言:     zh_CN.UTF-8"
+    echo "  输入法:   Fcitx5 拼音（Ctrl+Shift 切换）"
+    echo "  浏览器:   Google Chrome"
+    echo "============================================"
+
+    echo "root:${ROOT_PASSWD:-123456}" | chpasswd
+
+    if [ "$SKIP_RESTORE" = "1" ]; then
+        echo "检测到 SKIP_RESTORE，跳过配置恢复/备份与自定义启动脚本"
+    else
+        echo "开始 Hermes 历史配置恢复，同时执行用户自定义启动脚本"
+        /bz/auto_recover.sh
+    fi
+
+    export MODELSCOPE_API_KEY="${MODELSCOPE_API_KEY:-not_set_yet}"
+    export PATH="/root/.local/bin:/usr/local/node/bin:$PATH"
+
+    if [ -x /root/.local/bin/hermes ]; then
+        nohup /root/.local/bin/hermes dashboard >/tmp/hermes-dashboard.log 2>&1 &
+        nohup /root/.local/bin/hermes gateway >/tmp/hermes-gateway.log 2>&1 &
+    fi
+
+    elapsed=0
+    while ! netstat -tlnp 2>/dev/null | grep -q ':9119' && ! ss -tlnp 2>/dev/null | grep -q ':9119'; do
+        sleep 0.5
+        (( elapsed++ ))
+        if (( elapsed >= 60 )); then
+            echo "Timeout: port 9119 not ready after 60s" >&2
+            break
+        fi
+    done
+
+    rm /root/.config/google-chrome/Singleton* >/dev/null 2>&1
+    google-chrome-stable \
+    --no-sandbox \
+    --disable-dev-shm-usage \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --test-type \
+    http://127.0.0.1:9119 >/dev/null 2>&1 &
+    if [ -x /root/.local/bin/hermes ]; then
+        konsole --geometry 1555x945+177+51 -e /root/.local/bin/hermes >/dev/null 2>&1 &
+    fi
+    sleep 10
+    wmctrl -r "Desktop : hermes" -b add,above 2>/dev/null || true
+    sleep 30
+    wmctrl -r "Desktop : hermes" -b remove,above 2>/dev/null || true
+    wmctrl -a "Desktop : hermes" 2>/dev/null || true
+    tail -f /dev/null
+}
+
+main() {
+    export LANG=zh_CN.UTF-8
+    export LC_ALL=zh_CN.UTF-8
+    export LANGUAGE=zh_CN:zh
+    export OPENCLAW_DISABLE_BONJOUR="${OPENCLAW_DISABLE_BONJOUR:-1}"
+    export UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+    start_services
+}
+
+main "$@"

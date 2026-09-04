@@ -1,0 +1,27 @@
+#!/bin/bash
+export LANG=zh_CN.UTF-8
+export LC_ALL=zh_CN.UTF-8
+export LANGUAGE=zh_CN:zh
+export DISPLAY=:1
+
+export KWIN_COMPOSE=N
+export QT_QUICK_CONTROLS_STYLE=Fusion
+export PLASMA_USE_QT_SCALING=0
+
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+export INPUT_METHOD=fcitx
+export SDL_IM_MODULE=fcitx
+
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval "$(dbus-launch --sh-syntax --exit-with-session)"
+    export DBUS_SESSION_BUS_ADDRESS DBUS_SESSION_BUS_PID
+fi
+
+echo "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}" > /tmp/dbus-session.env
+
+fcitx5 -d --disable=wayland
+sleep 1
+
+exec startplasma-x11

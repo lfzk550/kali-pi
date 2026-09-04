@@ -1,0 +1,25 @@
+services:
+  kali-pi:
+    image: kali-pi:hermes
+    build: .
+    container_name: kali-pi
+    ports:
+      - "7860:7860"
+    environment:
+      ROOT_PASSWD: "${ROOT_PASSWD:-123456}"
+      MODELSCOPE_API_KEY: "${MODELSCOPE_API_KEY:-not_set_yet}"
+      VNC_PASSWD: "${VNC_PASSWD:-}"
+      SKIP_RESTORE: "${SKIP_RESTORE:-0}"
+      S3_BUCKET: "${S3_BUCKET:-}"
+      S3_KEY_ID: "${S3_KEY_ID:-}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-}"
+      S3_ENDPOINT: "${S3_ENDPOINT:-https://s3.cstcloud.cn}"
+      S3_BACKUP_PATH: "${S3_BACKUP_PATH:-backups/data_hermes.tar.gz}"
+      WEBDAV_URL: "${WEBDAV_URL:-}"
+      WEBDAV_USER: "${WEBDAV_USER:-}"
+      WEBDAV_PASSWD: "${WEBDAV_PASSWD:-}"
+      WEBDAV_CLIENT_UA: "${WEBDAV_CLIENT_UA:-Zotero/8.0}"
+      WEBDAV_BACKUP_PATH: "${WEBDAV_BACKUP_PATH:-backups/data_hermes.tar.gz}"
+      BACKUP_ENC_PASS: "${BACKUP_ENC_PASS:-}"
+    shm_size: "2gb"
+    restart: unless-stopped
