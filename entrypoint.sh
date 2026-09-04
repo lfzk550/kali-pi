@@ -12,8 +12,31 @@ start_services() {
     VNC_PORT=5901
     NOVNC_PORT=7860
     NOVNC_PATH="/usr/share/novnc"
+    if [ ! -d "$NOVNC_PATH" ]; then
+        for p in /usr/share/novnc /usr/share/novnc/utils /usr/share/webapps/novnc; do
+            if [ -f "$p/vnc.html" ]; then NOVNC_PATH="$p"; break; fi
+        done
+    fi
+
+    # Kali/Debian novnc package has vnc.html but no index.html → directory listing at /
+    if [ -f "${NOVNC_PATH}/vnc.html" ] && [ ! -f "${NOVNC_PATH}/index.html" ]; then
+        cat > "${NOVNC_PATH}/index.html" <<'EOF'
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=1&resize=scale">
+  <title>noVNC</title>
+</head>
+<body>
+  <p><a href="vnc.html?autoconnect=1&resize=scale">Connect to desktop</a></p>
+</body>
+</html>
+EOF
+    fi
 
     if [ -n "${VNC_PASSWD}" ]; then
+        mkdir -p "${HOME}/.vnc"
         echo "${VNC_PASSWD}" | vncpasswd -f > "${HOME}/.vnc/passwd"
         chmod 600 "${HOME}/.vnc/passwd"
         VNC_SECURITY_ARGS="-SecurityTypes VncAuth"
@@ -24,8 +47,8 @@ start_services() {
     DEMO_ARGS=""
     if [[ "$(hostname)" == *"-brianzhou-"* ]]; then
         DEMO_ARGS="-AcceptPointerEvents=0 -AcceptKeyEvents=0"
-        sed -i 's/set resizeSession(resize) {/set resizeSession(resize) {\n        return;/' "${NOVNC_PATH}/core/rfb.js"
-        sed -i "/<option value=\"remote\">/d" "${NOVNC_PATH}/vnc.html"
+        sed -i 's/set resizeSession(resize) {/set resizeSession(resize) {\n        return;/' "${NOVNC_PATH}/core/rfb.js" 2>/dev/null || true
+        sed -i "/<option value=\"remote\">/d" "${NOVNC_PATH}/vnc.html" 2>/dev/null || true
     fi
 
     vncserver -kill "${DISPLAY}" 2>/dev/null || true
@@ -65,11 +88,11 @@ start_services() {
     export XDG_RUNTIME_DIR=/tmp/root-runtime
 
     if [[ "$(hostname)" == *"-brianzhou-"* ]]; then
-        plasma-apply-wallpaperimage /bz/desktop.png
+        plasma-apply-wallpaperimage /bz/desktop.png 2>/dev/null || true
         rm -rf /mnt/workspace/root
     fi
 
-    echo "[*] 启动 noVNC，监听端口 ${NOVNC_PORT}..."
+    echo "[*] 启动 noVNC，监听端口 ${NOVNC_PORT}，webroot=${NOVNC_PATH}..."
     websockify \
         --web "${NOVNC_PATH}" \
         --heartbeat 30 \
@@ -79,7 +102,7 @@ start_services() {
     echo ""
     echo "============================================"
     echo "  KDE Plasma 桌面已启动！"
-    echo "  访问地址: http://<host>:${NOVNC_PORT}"
+    echo "  访问地址: http://<host>:${NOVNC_PORT}/vnc.html?autoconnect=1"
     echo "  分辨率:   ${VNC_GEOMETRY}"
     echo "  时区:     Asia/Shanghai (UTC+8)"
     echo "  语言:     zh_CN.UTF-8"

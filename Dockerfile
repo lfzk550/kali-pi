@@ -77,6 +77,7 @@ COPY root/.vnc/xstartup /root/.vnc/xstartup
 COPY root/bz-startup/main.sh /root/bz-startup/main.sh
 COPY usr/clear_apt_npm_cache.sh /usr/clear_apt_npm_cache.sh
 COPY config/models.json /root/.pi/agent/models.json
+COPY novnc/index.html /usr/share/novnc/index.html
 
 RUN chmod +x /entrypoint.sh /bz/*.sh /root/.vnc/xstartup /usr/clear_apt_npm_cache.sh /root/bz-startup/main.sh \
  && echo 'root:123456' | chpasswd
