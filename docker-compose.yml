@@ -1,6 +1,6 @@
 services:
   kali-pi:
-    image: kali-pi:hermes
+    image: kali-pi:kali
     build: .
     container_name: kali-pi
     ports:

@@ -1,6 +1,6 @@
-# Reconstruct of ghcr.io/tunmax/openclaw_computer:hermes_latest
-# Scripts extracted from the published image rootfs.
-FROM debian:bookworm
+# Kali rolling desktop + Hermes
+# Official base: kalilinux/kali-rolling (weekly snapshot, no tools preinstalled)
+FROM kalilinux/kali-rolling:latest
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=zh_CN.UTF-8 \
@@ -12,29 +12,41 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
     OPENCLAW_DISABLE_BONJOUR=1
 
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g; s|security.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
- && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
- && echo Asia/Shanghai > /etc/timezone
+# Kali 2026+ uses sources.list.d/*.sources; older snapshots still have sources.list.
+# Prefer Tsinghua Kali mirror when reachable.
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/kali.sources ]; then \
+      sed -i 's|http://http.kali.org/kali|http://mirrors.tuna.tsinghua.edu.cn/kali|g; s|https://http.kali.org/kali|http://mirrors.tuna.tsinghua.edu.cn/kali|g' /etc/apt/sources.list.d/kali.sources; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i 's|http.kali.org/kali|mirrors.tuna.tsinghua.edu.cn/kali|g' /etc/apt/sources.list; \
+    fi; \
+    ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime; \
+    echo Asia/Shanghai > /etc/timezone
 
+# Desktop stack only. Do not pull kali-linux-default/large (huge, not needed for VNC desktop).
+# Kali 2026.2 ships Plasma 6; kali-desktop-kde pulls the current KDE session.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates curl wget gnupg git sudo unzip rsync procps htop vim \
-        locales tzdata net-tools iputils-ping openssh-client \
+        kali-archive-keyring ca-certificates curl wget gnupg git sudo unzip rsync \
+        procps htop vim locales tzdata net-tools iproute2 iputils-ping openssh-client \
         python3 python3-dev python3-pip python3-venv python3-websockify \
         zsh build-essential inotify-tools wmctrl \
         dbus dbus-x11 \
         xorg xvfb x11-utils x11-xserver-utils \
         tigervnc-standalone-server tigervnc-common tigervnc-tools \
         novnc websockify \
-        kde-plasma-desktop plasma-desktop plasma-workspace kwin-x11 \
-        konsole kde-cli-tools \
+        kali-desktop-kde plasma-desktop plasma-workspace \
+        kwin-x11 konsole kde-cli-tools \
         fcitx5 fcitx5-chinese-addons fcitx5-pinyin fcitx5-frontend-qt5 \
-        fcitx5-frontend-gtk3 kde-config-fcitx5 \
+        fcitx5-frontend-gtk3 \
         fonts-noto-cjk fonts-noto-color-emoji fonts-wqy-microhei fonts-wqy-zenhei \
         fonts-liberation \
+    && (apt-get install -y --no-install-recommends kde-config-fcitx5 || true) \
     && sed -i 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Google Chrome is not in Kali repos.
 RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
  && echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main' \
       > /etc/apt/sources.list.d/google-chrome.list \
@@ -52,16 +64,17 @@ RUN curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-l
  && ln -sf /usr/local/node/bin/npm  /usr/local/bin/npm \
  && ln -sf /usr/local/node/bin/npx  /usr/local/bin/npx
 
-ENV PATH="/root/.local/bin:/usr/local/node/bin:/usr/local/bin:${PATH}"
+ENV PATH="/root/.local/bin:/usr/local/node/bin:/usr/local/bin:${PATH}" \
+    UV_SYSTEM_PYTHON=1
 RUN curl -fsSL https://astral.sh/uv/install.sh | sh
 
-RUN mkdir -p /root/.hermes /root/bz-startup /root/Desktop /root/.vnc /bz \
+# Kali rolling Python is 3.13+; install Hermes into a uv venv to avoid PEP 668.
+RUN mkdir -p /root/.hermes /root/bz-startup /root/Desktop /root/.vnc /bz /root/.local/bin \
  && (git clone --depth 1 --branch v0.15.1 https://github.com/NousResearch/hermes-agent.git /root/.hermes/hermes-agent \
      || git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /root/.hermes/hermes-agent) \
- && uv pip install --system -e /root/.hermes/hermes-agent || uv pip install --python python3 hermes-agent || true \
- && mkdir -p /root/.local/bin \
- && if [ -x /root/.hermes/hermes-agent/venv/bin/hermes ]; then ln -sf /root/.hermes/hermes-agent/venv/bin/hermes /root/.local/bin/hermes; fi \
- && command -v hermes >/dev/null 2>&1 && ln -sf "$(command -v hermes)" /root/.local/bin/hermes || true
+ && uv venv /root/.hermes/venv \
+ && uv pip install --python /root/.hermes/venv/bin/python -e /root/.hermes/hermes-agent \
+ && ln -sf /root/.hermes/venv/bin/hermes /root/.local/bin/hermes
 
 COPY entrypoint.sh /entrypoint.sh
 COPY bz/ /bz/

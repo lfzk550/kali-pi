@@ -24,4 +24,11 @@ echo "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}" > /tmp/dbus-session.
 fcitx5 -d --disable=wayland
 sleep 1
 
-exec startplasma-x11
+# Kali 2026.2 is Plasma 6; startplasma-x11 is still the X11 session.
+if command -v startplasma-x11 >/dev/null 2>&1; then
+    exec startplasma-x11
+elif command -v startplasma >/dev/null 2>&1; then
+    exec startplasma
+else
+    exec x-session-manager
+fi

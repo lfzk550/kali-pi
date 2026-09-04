@@ -1,8 +1,8 @@
-name: Build and push image
+name: Build and push Kali image
 
 on:
   push:
-    branches: [main]
+    branches: [kali]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/lfzk550/kali-pi:hermes
-            ghcr.io/lfzk550/kali-pi:latest
+            ghcr.io/lfzk550/kali-pi:kali
+            ghcr.io/lfzk550/kali-pi:rolling
           cache-from: type=gha
           cache-to: type=gha,mode=max
